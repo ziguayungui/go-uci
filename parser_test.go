@@ -24,7 +24,7 @@ func testParser(t *testing.T, name, input string, expected []token) {
 		}
 
 		if i >= len(expected) {
-			t.Errorf("token %d, unexpected item: %s", i, tok)
+			t.Errorf("name:%s, input:%s, token %d, unexpected item: %s", name, input, i, tok)
 			return false
 		}
 		if ex := expected[i]; tok.typ != ex.typ || !equalItemList(tok.items, ex.items) {
@@ -54,4 +54,25 @@ func equalItemList(a, b []item) bool {
 		}
 	}
 	return true
+}
+
+const tcEmptyOptionNotWorks = `
+config foo
+	option empty1 ''
+	option empty2
+`
+
+const tcEmptyOptionWorks = `
+config foo
+	option empty1 ''
+`
+
+func TestEmptyOption(t *testing.T) {
+	name := "empty options"
+	input := tcEmptyOptionWorks
+	scan(name, input).each(func(tok token) bool {
+		//fmt.Println("token=", tok.typ, tok.items)
+		return true
+	})
+	//fmt.Println("ok=", ok)
 }

@@ -1,7 +1,10 @@
 {
-  "name": "emptysection",
+  "name": "emptyoption",
   "sections": [{
-    "name": "empty",
-    "type": "empty"
+    "name": "",
+    "type": "empty",
+    "options": [
+      { "name": "empty1", "type":"option", "values": [""]}
+    ]
   }]
 }

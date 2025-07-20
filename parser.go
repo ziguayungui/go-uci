@@ -27,6 +27,12 @@ func scan(name, input string) *scanner {
 	}
 }
 
+/* func getShortFunctionName(i interface{}) string {
+	fullName := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	parts := strings.Split(fullName, ".")
+	return parts[len(parts)-1]
+} */
+
 func (s *scanner) nextToken() token {
 	for s.state != nil {
 		select {
@@ -36,6 +42,7 @@ func (s *scanner) nextToken() token {
 			}
 			return s.eof()
 		default:
+			//fmt.Println("scanner.state=", getShortFunctionName(s.state))
 			st := s.state(s)
 			s.state = st
 			if st == nil {
@@ -197,6 +204,7 @@ func scanOptionValue(s *scanner) scanFn {
 	case itemError:
 		return s.errorf(it.val)
 	default:
+		//panic("Unexpected token type")
 		return s.errorf("expected option value, got %s", it)
 	}
 }

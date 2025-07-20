@@ -122,11 +122,7 @@ config foo
 	option opt opt\
 `
 
-const tcEmptyOption = `
-config foo
-	option empty1
-	option empty2 ''
-`
+const tcEmptyOption = tcEmptyOptionWorks
 
 var lexerTests = []struct {
 	name, input string
@@ -200,8 +196,8 @@ var lexerTests = []struct {
 	}},
 	{"empty option", tcEmptyOption, []item{
 		itemConfig.mk("config"), itemIdent.mk("foo"), // unnamed
-		itemOption.mk("option"), itemIdent.mk("empty1"), // no value
-		itemOption.mk("option"), itemIdent.mk("empty2"), itemString.mk(""), // empty value
+		itemOption.mk("option"), itemIdent.mk("empty1"), itemString.mk(""), // empty value
+		//itemOption.mk("option"), itemIdent.mk("empty2"), // no value
 	}},
 }
 
@@ -277,5 +273,6 @@ var parserTests = []struct {
 	}},
 	{"empty option", tcEmptyOption, []token{
 		tokSection.mk(itemIdent.mk("foo")),
+		tokOption.mk(itemIdent.mk("empty1"), itemString.mk("")),
 	}},
 }

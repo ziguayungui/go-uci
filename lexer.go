@@ -52,6 +52,7 @@ func (l *lexer) nextItem() item {
 			return l.eof()
 
 		default:
+			//fmt.Println("lexer.state=", getShortFunctionName(l.state))
 			s := l.state(l)
 			l.state = s
 			if s == nil {
@@ -87,6 +88,7 @@ func (l *lexer) eof() item {
 // https://talks.golang.org/2011/lex.slide#25
 func (l *lexer) emit(t itemType) {
 	if l.pos > l.start {
+		//panic("emit itemType")
 		l.items <- item{t, l.input[l.start:l.pos], l.pos}
 		l.start = l.pos
 	}
