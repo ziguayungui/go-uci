@@ -27,8 +27,8 @@ func GetSections(config, secType string) ([]string, error) {
 }
 
 // GetSectionOptions delegates to the default tree. See Tree for details.
-func GetSectionOptions(config, secType string) ([]SectionOption, error) {
-	return defaultTree.GetSectionOptions(config, secType)
+func GetSectionOptions(config, section string) ([]SectionOption, error) {
+	return defaultTree.GetSectionOptions(config, section)
 }
 
 // Get delegates to the default tree. See Tree for details.
