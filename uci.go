@@ -163,6 +163,9 @@ func (t *tree) Revert(configs ...string) {
 }
 
 func (t *tree) GetSections(config string, secType string) ([]string, error) {
+	t.Lock()
+	defer t.Unlock()
+
 	cfg, err := t.ensureConfigLoaded(config)
 	if err != nil {
 		return nil, fmt.Errorf("ensureConfigLoaded: %w", err)
@@ -179,6 +182,9 @@ func (t *tree) GetSections(config string, secType string) ([]string, error) {
 }
 
 func (t *tree) GetSectionOptions(config string, section string) ([]SectionOption, error) {
+	t.Lock()
+	defer t.Unlock()
+
 	cfg, err := t.ensureConfigLoaded(config)
 	if err != nil {
 		return nil, fmt.Errorf("ensureConfigLoaded: %w", err)
