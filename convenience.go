@@ -12,8 +12,8 @@ func LoadConfig(name string, forceReload bool) error {
 }
 
 // Commit delegates to the default tree. See Tree for details.
-func Commit() error {
-	return defaultTree.Commit()
+func Commit(configs ...string) error {
+	return defaultTree.Commit(configs...)
 }
 
 // Revert delegates to the default tree. See Tree for details.

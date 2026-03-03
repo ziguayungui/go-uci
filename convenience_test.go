@@ -21,8 +21,8 @@ func (m *mockTree) LoadConfig(name string, forceReload bool) error {
 	return args.Error(0)
 }
 
-func (m *mockTree) Commit() error {
-	args := m.Called()
+func (m *mockTree) Commit(configs ...string) error {
+	args := m.Called(configs)
 	return args.Error(0)
 }
 
@@ -97,8 +97,12 @@ func TestConvenienceLoadConfig(t *testing.T) {
 func TestConvenienceCommit(t *testing.T) {
 	assert := assert.New(t)
 	m := defaultTree.(*mockTree)
-	m.On("Commit").Return(nil)
+
+	m.On("Commit", mock.Anything).Return(nil)
 	assert.NoError(Commit())
+	assert.NoError(Commit("network"))
+	assert.NoError(Commit("network", "system"))
+
 	m.AssertExpectations(t)
 }
 

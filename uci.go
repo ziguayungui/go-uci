@@ -9,11 +9,8 @@ import (
 	"sync"
 )
 
-// Tree defines the base directory for UCI config files. The default value
-// on OpenWrt devices point to /etc/config, so that is what the default
-// tree uses as well (you can access the default tree with the package level
-// functions with the same signature as in this interface).
-type Tree interface {
+// ConfigLifecycle defines methods for managing the lifecycle of config files.
+type ConfigLifecycle interface {
 	// LoadConfig reads a config file into memory and returns nil. If the
 	// config is already loaded, and forceReload is false, an error of type
 	// ErrConfigAlreadyLoaded is returned. Errors reading the config file
@@ -24,18 +21,23 @@ type Tree interface {
 	// load missing files automatically.
 	LoadConfig(name string, forceReload bool) error
 
-	// Commit writes all changes back to the system.
+	// Commit writes changes back to the system. If config names are provided,
+	// only those configs are written. If no config names are provided, all
+	// changes are written.
 	//
 	// Note: this is not transaction safe. If, for whatever reason, the
 	// writing of any file fails, the succeeding files are left untouched
 	// while the preceding files are not reverted.
-	Commit() error
+	Commit(configs ...string) error
 
 	// Revert undoes changes to the config files given as arguments. If
 	// no argument is given, all changes are reverted. This clears the
 	// internal memory and does not access the file system.
 	Revert(configs ...string)
+}
 
+// ConfigReader defines methods for reading configuration data.
+type ConfigReader interface {
 	// GetSections returns the names of all sections of a certain type
 	// in a config, and an error indicating whether the operation was
 	// successful.
@@ -66,7 +68,10 @@ type Tree interface {
 	// specified value as a boolean.  If the found value can't be
 	// interpreted as either true or false, it will return nil and false.
 	GetBool(config, section, option string) (bool, bool)
+}
 
+// ConfigWriter defines methods for modifying configuration data.
+type ConfigWriter interface {
 	// SetType replaces the fully qualified option with the given values.
 	// It returns whether the config file and section exists. For new
 	// files and sections, you first need to initialize them with
@@ -83,6 +88,19 @@ type Tree interface {
 
 	// DelSection remove a config section and its options.
 	DelSection(config, section string) error
+}
+
+// Tree defines the base directory for UCI config files. The default value
+// on OpenWrt devices point to /etc/config, so that is what the default
+// tree uses as well (you can access the default tree with the package level
+// functions with the same signature as in this interface).
+//
+// Tree is a composite interface that combines ConfigLifecycle, ConfigReader,
+// and ConfigWriter for backward compatibility and full functionality.
+type Tree interface {
+	ConfigLifecycle
+	ConfigReader
+	ConfigWriter
 }
 
 type tree struct {
@@ -135,20 +153,43 @@ func (t *tree) loadConfig(name string) error {
 	return nil
 }
 
-func (t *tree) Commit() error {
+func (t *tree) Commit(configs ...string) error {
 	t.Lock()
 	defer t.Unlock()
 
+	if len(configs) == 0 {
+		return t.commitAll()
+	}
+	return t.commitSpecific(configs)
+}
+
+func (t *tree) commitAll() error {
 	for _, config := range t.configs {
-		if !config.tainted {
-			continue
-		}
-		err := t.saveConfig(config)
-		if err != nil {
+		if err := t.saveIfTainted(config); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (t *tree) commitSpecific(configs []string) error {
+	for _, name := range configs {
+		config, ok := t.configs[name]
+		if !ok {
+			continue
+		}
+		if err := t.saveIfTainted(config); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *tree) saveIfTainted(config *config) error {
+	if !config.tainted {
+		return nil
+	}
+	return t.saveConfig(config)
 }
 
 func (t *tree) Revert(configs ...string) {
