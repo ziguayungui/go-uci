@@ -507,3 +507,94 @@ func (m *mockTempFile) Sync() error {
 	args := m.Called()
 	return args.Error(0)
 }
+
+func TestAddAnonymousSection(t *testing.T) {
+	assert := assert.New(t)
+	r := NewTree("testdata")
+
+	secName, err := r.AddAnonymousSection("nonexistent", "interface")
+	assert.NoError(err)
+	assert.Equal("@interface[0]", secName)
+
+	secName, err = r.AddAnonymousSection("system", "newtype")
+	assert.NoError(err)
+	assert.Equal("@newtype[0]", secName)
+
+	sections, err := r.GetSections("system", "newtype")
+	assert.NoError(err)
+	assert.ElementsMatch([]string{"@newtype[0]"}, sections)
+}
+
+func TestAddList(t *testing.T) {
+	assert := assert.New(t)
+	r := NewTree("testdata")
+
+	assert.NoError(r.AddList("system", "ntp", "server", "8.8.8.8"))
+	values, ok := r.Get("system", "ntp", "server")
+	assert.True(ok)
+	assert.Contains(values, "8.8.8.8")
+
+	assert.NoError(r.AddList("system", "ntp", "server", "8.8.8.8"))
+	values, ok = r.Get("system", "ntp", "server")
+	assert.True(ok)
+	count := 0
+	for _, v := range values {
+		if v == "8.8.8.8" {
+			count++
+		}
+	}
+	assert.Equal(1, count)
+}
+
+func TestDelList(t *testing.T) {
+	assert := assert.New(t)
+	r := NewTree("testdata")
+
+	removed, err := r.DelList("system", "ntp", "server", "0.lede.pool.ntp.org")
+	assert.NoError(err)
+	assert.True(removed)
+
+	values, ok := r.Get("system", "ntp", "server")
+	assert.True(ok)
+	assert.NotContains(values, "0.lede.pool.ntp.org")
+
+	removed, err = r.DelList("system", "ntp", "server", "nonexistent")
+	assert.NoError(err)
+	assert.False(removed)
+}
+
+func TestRenameSection(t *testing.T) {
+	assert := assert.New(t)
+	r := NewTree("testdata")
+
+	assert.NoError(r.AddSection("system", "oldname", "testtype"))
+	assert.NoError(r.SetType("system", "oldname", "testopt", TypeOption, "testval"))
+
+	err := r.RenameSection("system", "oldname", "newname")
+	assert.NoError(err)
+
+	values, ok := r.Get("system", "newname", "testopt")
+	assert.True(ok)
+	assert.ElementsMatch([]string{"testval"}, values)
+
+	err = r.RenameSection("system", "nonexistent", "newname2")
+	assert.Error(err)
+}
+
+func TestShow(t *testing.T) {
+	assert := assert.New(t)
+	r := NewTree("testdata")
+
+	output, err := r.Show("system", "ntp", "")
+	assert.NoError(err)
+	assert.NotEmpty(output)
+	assert.Contains(output, "config timeserver 'ntp'")
+
+	output, err = r.Show("system", "ntp", "enabled")
+	assert.NoError(err)
+	assert.NotEmpty(output)
+
+	output, err = r.Show("system", "", "")
+	assert.NoError(err)
+	assert.NotEmpty(output)
+}

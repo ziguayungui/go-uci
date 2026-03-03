@@ -328,3 +328,19 @@ func (o *option) MergeValues(vs ...string) {
 		o.AddValue(v)
 	}
 }
+
+func (o *option) DelValue(v string) bool {
+	var i int
+	for i = 0; i < len(o.Values); i++ {
+		if o.Values[i] == v {
+			break
+		}
+	}
+
+	if i == len(o.Values) {
+		return false
+	}
+
+	o.Values = append(o.Values[:i], o.Values[i+1:]...)
+	return true
+}

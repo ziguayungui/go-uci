@@ -78,6 +78,31 @@ func (m *mockTree) DelSection(config, section string) error {
 	return nil
 }
 
+func (m *mockTree) AddAnonymousSection(config, typ string) (string, error) {
+	args := m.Called(config, typ)
+	return args.String(0), args.Error(1)
+}
+
+func (m *mockTree) AddList(config, section, option, value string) error {
+	args := m.Called(config, section, option, value)
+	return args.Error(0)
+}
+
+func (m *mockTree) DelList(config, section, option, value string) (bool, error) {
+	args := m.Called(config, section, option, value)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *mockTree) RenameSection(config, oldName, newName string) error {
+	args := m.Called(config, oldName, newName)
+	return args.Error(0)
+}
+
+func (m *mockTree) Show(config, section, option string) (string, error) {
+	args := m.Called(config, section, option)
+	return args.String(0), args.Error(1)
+}
+
 func TestMain(m *testing.M) {
 	defaultTree = &mockTree{}
 	os.Exit(m.Run())
@@ -189,5 +214,54 @@ func TestConvenienceDelSection(t *testing.T) {
 	m.On("DelSection", "foo", "bar").Return()
 	err := DelSection("foo", "bar")
 	assert.NoError(t, err)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceAddAnonymousSection(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("AddAnonymousSection", "network", "interface").Return("@interface[0]", nil)
+	secName, err := AddAnonymousSection("network", "interface")
+	assert.NoError(err)
+	assert.Equal("@interface[0]", secName)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceAddList(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("AddList", "network", "lan", "dns", "8.8.8.8").Return(nil)
+	err := AddList("network", "lan", "dns", "8.8.8.8")
+	assert.NoError(err)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceDelList(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("DelList", "network", "lan", "dns", "8.8.8.8").Return(true, nil)
+	removed, err := DelList("network", "lan", "dns", "8.8.8.8")
+	assert.NoError(err)
+	assert.True(removed)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceRenameSection(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("RenameSection", "network", "old_lan", "new_lan").Return(nil)
+	err := RenameSection("network", "old_lan", "new_lan")
+	assert.NoError(err)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceShow(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	expectedOutput := "config interface 'lan'\n\toption ifname 'eth0'\n"
+	m.On("Show", "network", "lan", "").Return(expectedOutput, nil)
+	output, err := Show("network", "lan", "")
+	assert.NoError(err)
+	assert.Equal(expectedOutput, output)
 	m.AssertExpectations(t)
 }

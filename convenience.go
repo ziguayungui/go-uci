@@ -60,3 +60,28 @@ func AddSection(config, section, typ string) error {
 func DelSection(config, section string) error {
 	return defaultTree.DelSection(config, section)
 }
+
+// AddAnonymousSection delegates to the default tree. See Tree for details.
+func AddAnonymousSection(config, typ string) (string, error) {
+	return defaultTree.AddAnonymousSection(config, typ)
+}
+
+// AddList delegates to the default tree. See Tree for details.
+func AddList(config, section, option, value string) error {
+	return defaultTree.AddList(config, section, option, value)
+}
+
+// DelList delegates to the default tree. See Tree for details.
+func DelList(config, section, option, value string) (bool, error) {
+	return defaultTree.DelList(config, section, option, value)
+}
+
+// RenameSection delegates to the default tree. See Tree for details.
+func RenameSection(config, oldName, newName string) error {
+	return defaultTree.RenameSection(config, oldName, newName)
+}
+
+// Show delegates to the default tree. See Tree for details.
+func Show(config, section, option string) (string, error) {
+	return defaultTree.Show(config, section, option)
+}

@@ -1,6 +1,7 @@
 package uci
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -68,6 +69,13 @@ type ConfigReader interface {
 	// specified value as a boolean.  If the found value can't be
 	// interpreted as either true or false, it will return nil and false.
 	GetBool(config, section, option string) (bool, bool)
+
+	// Show returns a formatted string representation of the configuration.
+	// If all parameters are empty, it shows the entire tree.
+	// If only config is provided, it shows that config.
+	// If config and section are provided, it shows that section.
+	// If all three are provided, it shows that specific option.
+	Show(config, section, option string) (string, error)
 }
 
 // ConfigWriter defines methods for modifying configuration data.
@@ -86,8 +94,24 @@ type ConfigWriter interface {
 	// Otherwise an ErrSectionTypeMismatch is returned.
 	AddSection(config, section, typ string) error
 
+	// AddAnonymousSection adds a new unnamed (anonymous) config section.
+	// Returns the synthetic section name (e.g., "@type[0]").
+	AddAnonymousSection(config, typ string) (string, error)
+
 	// DelSection remove a config section and its options.
 	DelSection(config, section string) error
+
+	// AddList adds a value to a list option. If the option doesn't exist,
+	// it will be created as a list type. If the value already exists in
+	// the list, nothing happens.
+	AddList(config, section, option, value string) error
+
+	// DelList removes a value from a list option. Returns whether the
+	// value was found and removed.
+	DelList(config, section, option, value string) (bool, error)
+
+	// RenameSection renames an existing section.
+	RenameSection(config, oldName, newName string) error
 }
 
 // Tree defines the base directory for UCI config files. The default value
@@ -404,6 +428,171 @@ func (t *tree) DelSection(config, section string) error {
 	cfg.Del(section)
 	cfg.tainted = true
 	return nil
+}
+
+func (t *tree) AddAnonymousSection(config, typ string) (string, error) {
+	t.Lock()
+	defer t.Unlock()
+
+	cfg, err := t.ensureConfigLoaded(config)
+	if err != nil {
+		if errors.Is(err, ParseError{}) {
+			return "", fmt.Errorf("ensureConfigLoaded: %w", err)
+		}
+		if errors.Is(err, os.ErrNotExist) {
+			cfg = newConfig(config)
+			cfg.tainted = true
+			t.configs[config] = cfg
+		} else {
+			return "", fmt.Errorf("ensureConfigLoaded: %w", err)
+		}
+	}
+
+	newSec := newSection(typ, "")
+	cfg.Add(newSec)
+	cfg.tainted = true
+	return cfg.sectionName(newSec), nil
+}
+
+func (t *tree) AddList(config, section, option, value string) error {
+	t.Lock()
+	defer t.Unlock()
+
+	cfg, err := t.ensureConfigLoaded(config)
+	if err != nil {
+		return fmt.Errorf("ensureConfigLoaded: %w", err)
+	}
+	sec := cfg.Get(section)
+	if sec == nil {
+		return ErrSectionNotFound{Section: section}
+	}
+
+	opt := sec.Get(option)
+	if opt == nil {
+		sec.Add(newOption(option, TypeList, value))
+	} else {
+		if opt.Type != TypeList {
+			opt.Type = TypeList
+		}
+		opt.MergeValues(value)
+	}
+	cfg.tainted = true
+	return nil
+}
+
+func (t *tree) DelList(config, section, option, value string) (bool, error) {
+	t.Lock()
+	defer t.Unlock()
+
+	cfg, err := t.ensureConfigLoaded(config)
+	if err != nil {
+		return false, fmt.Errorf("ensureConfigLoaded: %w", err)
+	}
+	sec := cfg.Get(section)
+	if sec == nil {
+		return false, ErrSectionNotFound{Section: section}
+	}
+
+	opt := sec.Get(option)
+	if opt == nil {
+		return false, nil
+	}
+
+	removed := opt.DelValue(value)
+	if removed {
+		cfg.tainted = true
+	}
+	return removed, nil
+}
+
+func (t *tree) RenameSection(config, oldName, newName string) error {
+	t.Lock()
+	defer t.Unlock()
+
+	cfg, err := t.ensureConfigLoaded(config)
+	if err != nil {
+		return fmt.Errorf("ensureConfigLoaded: %w", err)
+	}
+
+	oldSec := cfg.Get(oldName)
+	if oldSec == nil {
+		return ErrSectionNotFound{Section: oldName}
+	}
+
+	newSec := cfg.Get(newName)
+	if newSec != nil {
+		return fmt.Errorf("section already exists: %s", newName)
+	}
+
+	oldSec.Name = newName
+	cfg.tainted = true
+	return nil
+}
+
+func (t *tree) Show(config, section, option string) (string, error) {
+	t.Lock()
+	defer t.Unlock()
+
+	var buf bytes.Buffer
+
+	if config == "" {
+		for _, cfg := range t.configs {
+			_, _ = cfg.WriteTo(&buf)
+		}
+		return buf.String(), nil
+	}
+
+	cfg, err := t.ensureConfigLoaded(config)
+	if err != nil {
+		return "", fmt.Errorf("ensureConfigLoaded: %w", err)
+	}
+
+	if section == "" {
+		_, _ = cfg.WriteTo(&buf)
+		return buf.String(), nil
+	}
+
+	sec := cfg.Get(section)
+	if sec == nil {
+		return "", ErrSectionNotFound{Section: section}
+	}
+
+	if option == "" {
+		if sec.Name == "" {
+			fmt.Fprintf(&buf, "config %s\n", sec.Type)
+		} else {
+			fmt.Fprintf(&buf, "config %s '%s'\n", sec.Type, sec.Name)
+		}
+		for _, opt := range sec.Options {
+			switch opt.Type {
+			case TypeOption:
+				fmt.Fprintf(&buf, "\toption %s '%s'\n", opt.Name, opt.Values[0])
+			case TypeList:
+				for _, v := range opt.Values {
+					fmt.Fprintf(&buf, "\tlist %s '%s'\n", opt.Name, v)
+				}
+			}
+		}
+		return buf.String(), nil
+	}
+
+	opt := sec.Get(option)
+	if opt == nil {
+		return "", nil
+	}
+
+	switch opt.Type {
+	case TypeOption:
+		fmt.Fprintf(&buf, "option %s '%s'", opt.Name, opt.Values[0])
+	case TypeList:
+		for i, v := range opt.Values {
+			if i > 0 {
+				fmt.Fprintf(&buf, "\n")
+			}
+			fmt.Fprintf(&buf, "list %s '%s'", opt.Name, v)
+		}
+	}
+	return buf.String(), nil
 }
 
 func (t *tree) saveConfig(c *config) error {
