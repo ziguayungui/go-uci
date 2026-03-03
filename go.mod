@@ -1,4 +1,4 @@
-module github.com/digineo/go-uci/v2
+module github.com/ziguayungui/go-uci/dev
 
 go 1.21
 

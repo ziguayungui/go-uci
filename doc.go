@@ -4,7 +4,7 @@ Interface) files in pure Go.
 
 The typical use case is reading and modifying UCI config options:
 
-	import "github.com/digineo/go-uci"
+	import "github.com/ziguayungui/go-uci"
 
 	uci.Get("network", "lan", "ifname") //=> []string{"eth0.1"}, true
 	uci.SetType("network", "lan", uci.TypeOption, "ipaddr", "192.168.7.1")
