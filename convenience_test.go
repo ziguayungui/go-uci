@@ -45,7 +45,13 @@ func (m *mockTree) GetSectionOptions(config string, section string) ([]SectionOp
 
 func (m *mockTree) Get(config, section, option string) ([]string, bool) {
 	args := m.Called(config, section, option)
-	return []string{args.String(0)}, args.Bool(1)
+	var vals []string
+	if arg0, ok := args.Get(0).([]string); ok {
+		vals = arg0
+	} else {
+		vals = []string{args.String(0)}
+	}
+	return vals, args.Bool(1)
 }
 
 func (m *mockTree) GetLast(config, section, option string) (string, bool) {
@@ -263,5 +269,92 @@ func TestConvenienceShow(t *testing.T) {
 	output, err := Show("network", "lan", "")
 	assert.NoError(err)
 	assert.Equal(expectedOutput, output)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceSet(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("SetType", "network", "lan", "ipaddr", TypeOption, []string{"192.168.1.1"}).Return(nil)
+	err := Set("network", "lan", "ipaddr", "192.168.1.1")
+	assert.NoError(err)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceShowPath(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	expectedOutput := "config interface 'lan'\n\toption ifname 'eth0'\n"
+	m.On("Show", "network", "lan", "").Return(expectedOutput, nil)
+	output, err := ShowPath("network.lan")
+	assert.NoError(err)
+	assert.Equal(expectedOutput, output)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceGetPath(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("Get", "network", "lan", "ipaddr").Return([]string{"192.168.1.1"}, true)
+	values, ok := GetPath("network.lan.ipaddr")
+	assert.True(ok)
+	assert.Equal([]string{"192.168.1.1"}, values)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceGetLastPath(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("GetLast", "network", "lan", "ipaddr").Return("192.168.1.1", true)
+	value, ok := GetLastPath("network.lan.ipaddr")
+	assert.True(ok)
+	assert.Equal("192.168.1.1", value)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceGetBoolPath(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("GetBool", "network", "lan", "enabled").Return(true, true)
+	value, ok := GetBoolPath("network.lan.enabled")
+	assert.True(ok)
+	assert.True(value)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceSetPath(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("SetType", "network", "lan", "ipaddr", TypeOption, []string{"192.168.1.1"}).Return(nil)
+	err := SetPath("network.lan.ipaddr", "192.168.1.1")
+	assert.NoError(err)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceDelPath(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("Del", "network", "lan", "ipaddr").Return(nil)
+	err := DelPath("network.lan.ipaddr")
+	assert.NoError(err)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceAddListPath(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("AddList", "network", "lan", "dns", "8.8.8.8").Return(nil)
+	err := AddListPath("network.lan.dns", "8.8.8.8")
+	assert.NoError(err)
+	m.AssertExpectations(t)
+}
+
+func TestConvenienceDelListPath(t *testing.T) {
+	assert := assert.New(t)
+	m := defaultTree.(*mockTree)
+	m.On("DelList", "network", "lan", "dns", "8.8.8.8").Return(true, nil)
+	removed, err := DelListPath("network.lan.dns", "8.8.8.8")
+	assert.NoError(err)
+	assert.True(removed)
 	m.AssertExpectations(t)
 }

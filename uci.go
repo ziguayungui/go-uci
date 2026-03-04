@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -220,11 +221,35 @@ func (t *tree) Revert(configs ...string) {
 	t.Lock()
 	if len(configs) == 0 {
 		t.configs = nil
-	}
-	for _, config := range configs {
-		delete(t.configs, config)
+	} else {
+		for _, path := range configs {
+			parts := splitUCI(path)
+			switch len(parts) {
+			case UCIConfigOnly:
+				delete(t.configs, parts[UCIPartIndexConfig])
+			case UCIConfigSection, UCIConfigSectionOption:
+				if cfg, ok := t.configs[parts[UCIPartIndexConfig]]; ok {
+					if len(parts) == UCIConfigSection {
+						cfg.Del(parts[UCIPartIndexSection])
+						cfg.tainted = true
+					} else {
+						if sec := cfg.Get(parts[UCIPartIndexSection]); sec != nil {
+							sec.Del(parts[UCIPartIndexOption])
+							cfg.tainted = true
+						}
+					}
+				}
+			}
+		}
 	}
 	t.Unlock()
+}
+
+func splitUCI(path string) []string {
+	if path == "" {
+		return nil
+	}
+	return strings.SplitN(path, ".", UCIConfigPartCount)
 }
 
 func (t *tree) GetSections(config string, secType string) ([]string, error) {

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -597,4 +598,129 @@ func TestShow(t *testing.T) {
 	output, err = r.Show("system", "", "")
 	assert.NoError(err)
 	assert.NotEmpty(output)
+
+	assert.NoError(r.LoadConfig("system", true))
+	output, err = r.Show("", "", "")
+	assert.NoError(err)
+	assert.NotEmpty(output)
+}
+
+func TestCommitWithParams(t *testing.T) {
+	origNewTmpFile := newTmpFile
+	m := &mockTempFile{}
+	newTmpFile = func(_, _ string) (tmpFile, error) { return m, nil }
+	defer func() { newTmpFile = origNewTmpFile }()
+
+	assert := assert.New(t)
+	r := NewTree("testdata")
+
+	reset := func(onwrite, onchmod, onsync, onrename error) {
+		m.Buffer.Reset()
+		m.ExpectedCalls = nil
+		m.On("Close").Return(nil)
+		m.On("Remove").Return(nil)
+		m.On("Write", mock.AnythingOfType("[]uint8")).Return(onwrite)
+		m.On("Chmod", os.FileMode(0644)).Return(onchmod)
+		m.On("Sync").Return(onsync)
+		m.On("Rename", mock.Anything).Return(onrename)
+	}
+
+	reset(nil, nil, nil, nil)
+	assert.NoError(r.AddSection("network", "lan", "interface"))
+	assert.NoError(r.SetType("network", "lan", "ipaddr", TypeOption, "192.168.1.1"))
+	assert.NoError(r.Commit("network"))
+
+	reset(nil, nil, nil, nil)
+	assert.NoError(r.AddSection("system", "test", "system"))
+	assert.NoError(r.AddSection("wireless", "test", "wifi-device"))
+	assert.NoError(r.Commit("system", "wireless"))
+}
+
+func TestRevertWithPaths(t *testing.T) {
+	assert := assert.New(t)
+	r := NewTree("testdata")
+	tree := r.(*tree)
+
+	assert.NoError(r.LoadConfig("system", false))
+	assert.NoError(r.SetType("system", "ntp", "enabled", TypeOption, "0"))
+	assert.True(tree.configs["system"].tainted)
+
+	r.Revert("system.ntp.enabled")
+	assert.Len(tree.configs, 1)
+	assert.True(tree.configs["system"].tainted)
+	sec := tree.configs["system"].Get("ntp")
+	assert.NotNil(sec)
+	opt := sec.Get("enabled")
+	assert.Nil(opt)
+
+	assert.NoError(r.SetType("system", "ntp", "enabled", TypeOption, "0"))
+	r.Revert("system.ntp")
+	assert.Len(tree.configs, 1)
+	assert.True(tree.configs["system"].tainted)
+	sec = tree.configs["system"].Get("ntp")
+	assert.Nil(sec)
+}
+
+func TestPathConvenience(t *testing.T) {
+	assert := assert.New(t)
+	r := NewTree("testdata")
+
+	assert.NoError(r.AddSection("testcfg", "testsec", "testtype"))
+	assert.NoError(r.SetType("testcfg", "testsec", "testopt", TypeOption, "testval"))
+	assert.NoError(r.AddList("testcfg", "testsec", "testlist", "val1"))
+	assert.NoError(r.AddList("testcfg", "testsec", "testlist", "val2"))
+
+	parts := strings.SplitN("testcfg.testsec", ".", UCIConfigPartCount)
+	var output string
+	var err error
+	switch len(parts) {
+	case UCIConfigOnly:
+		output, err = r.Show(parts[UCIPartIndexConfig], "", "")
+	case UCIConfigSection:
+		output, err = r.Show(parts[UCIPartIndexConfig], parts[UCIPartIndexSection], "")
+	case UCIConfigSectionOption:
+		output, err = r.Show(parts[UCIPartIndexConfig], parts[UCIPartIndexSection], parts[UCIPartIndexOption])
+	}
+	assert.NoError(err)
+	assert.NotEmpty(output)
+
+	parts = strings.SplitN("testcfg.testsec.testopt", ".", UCIConfigPartCount)
+	var vals []string
+	var ok bool
+	if len(parts) == UCIConfigPartCount {
+		vals, ok = r.Get(parts[UCIPartIndexConfig], parts[UCIPartIndexSection], parts[UCIPartIndexOption])
+	}
+	assert.True(ok)
+	assert.Equal([]string{"testval"}, vals)
+
+	var last string
+	if len(parts) == UCIConfigPartCount {
+		last, ok = r.GetLast(parts[UCIPartIndexConfig], parts[UCIPartIndexSection], parts[UCIPartIndexOption])
+	}
+	assert.True(ok)
+	assert.Equal("testval", last)
+
+	assert.NoError(r.SetType("testcfg", "testsec", "testopt", TypeOption, "newval"))
+	if len(parts) == UCIConfigPartCount {
+		last, ok = r.GetLast(parts[UCIPartIndexConfig], parts[UCIPartIndexSection], parts[UCIPartIndexOption])
+	}
+	assert.True(ok)
+	assert.Equal("newval", last)
+
+	assert.NoError(r.Del("testcfg", "testsec", "testopt"))
+	vals, ok = r.Get("testcfg", "testsec", "testopt")
+	assert.True(ok)
+	assert.Len(vals, 0)
+
+	assert.NoError(r.AddList("testcfg", "testsec", "testlist", "val3"))
+	vals, ok = r.Get("testcfg", "testsec", "testlist")
+	assert.True(ok)
+	assert.Contains(vals, "val3")
+
+	removed, err := r.DelList("testcfg", "testsec", "testlist", "val2")
+	assert.NoError(err)
+	assert.True(removed)
+	vals, ok = r.Get("testcfg", "testsec", "testlist")
+	assert.True(ok)
+	assert.NotContains(vals, "val2")
 }

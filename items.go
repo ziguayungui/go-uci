@@ -21,6 +21,19 @@ const (
 	TypeList                     // option is a list
 )
 
+const (
+	UCIConfigPartCount = 3 // Maximum number of parts in a UCI path (config.section.option)
+	UCIPartIndexConfig = 0 // Index for config part in UCI path
+	UCIPartIndexSection = 1 // Index for section part in UCI path
+	UCIPartIndexOption = 2 // Index for option part in UCI path
+)
+
+const (
+	UCIConfigOnly = 1 // Path has only config part
+	UCIConfigSection = 2 // Path has config and section parts
+	UCIConfigSectionOption = 3 // Path has config, section and option parts
+)
+
 // MarshalJSON implements encoding/json.Marshaler.
 func (ot OptionType) MarshalJSON() ([]byte, error) {
 	switch ot {
